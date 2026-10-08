@@ -1,23 +1,22 @@
 # Atos Launcher
 
-Aplicação web minimalista para abrir vários sites de trabalho com um clique.
+Aplicação web leve para abrir os sites de cada ambiente de trabalho em novas abas.
 
-## Rodar localmente
+## Recursos
+- Múltiplos ambientes independentes: criar, selecionar, renomear e excluir.
+- Links por ambiente: adicionar, editar, excluir e ativar/desativar.
+- Abrir todas as abas ativas do ambiente selecionado com um clique.
+- Persistência local em `localStorage`, sem login ou servidor.
+- Migração automática dos links salvos na versão 1.0 para o ambiente inicial.
 
+## Rodar
 ```bash
 npm install
 npm run dev
 ```
 
-## Publicar na Vercel
+## Publicar
+Importe este repositório na Vercel. Framework: Vite; build: `npm run build`; output: `dist`.
 
-Importe o repositório, selecione Vite (detectado automaticamente), use `npm run build` e diretório de saída `dist`.
-
-## Como funciona
-
-- Cadastre nome e URL (URLs sem protocolo recebem https://).
-- Ative ou desative sites no interruptor.
-- Clique em **Iniciar trabalho** para solicitar a abertura dos sites ativos em abas separadas.
-- Os dados são guardados em `localStorage` no navegador atual.
-
-**Observação:** navegadores podem bloquear parte das abas abertas simultaneamente. Autorize pop-ups para o domínio do Launcher quando necessário. Os links não são sincronizados entre dispositivos e podem ser perdidos se os dados do site forem apagados.
+## Observações
+O navegador pode bloquear a abertura de múltiplas abas; autorize pop-ups para o domínio do Launcher se necessário. Os ambientes ficam armazenados somente no navegador/dispositivo atual. Limpar os dados do site apaga o armazenamento local.
