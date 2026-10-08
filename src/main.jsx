@@ -1,62 +1,35 @@
-import React, {useState} from 'react';
+import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
 
-const KEY = 'atos-launcher-links-v1';
-const uid = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-function normalize(raw) {
-  let value = raw.trim();
-  if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
-  try {
-    const url = new URL(value);
-    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname.includes('.')) return null;
-    return url.href;
-  } catch {return null;}
+const KEY='atos-launcher-v2',OLD='atos-launcher-links-v1';
+const id=()=>crypto?.randomUUID?.()||String(Date.now()+Math.random());
+const safeURL=raw=>{try{const u=new URL(/^https?:\/\//i.test(raw.trim())?raw.trim():'https://'+raw.trim());return ['https:','http:'].includes(u.protocol)&&u.hostname.includes('.')?u.href:null}catch{return null}};
+const fresh=()=>({version:2,selected:'default',spaces:[{id:'default',name:'Meu ambiente',links:[]}]});
+function load(){try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved?.version===2&&Array.isArray(saved.spaces)&&saved.spaces.length){const spaces=saved.spaces.filter(s=>s&&typeof s.id==='string'&&typeof s.name==='string'&&Array.isArray(s.links)).map(s=>({...s,links:s.links.filter(l=>l&&typeof l.name==='string'&&typeof l.url==='string'&&safeURL(l.url)).map(l=>({...l,url:safeURL(l.url),enabled:l.enabled!==false}))}));if(spaces.length)return {version:2,spaces,selected:spaces.some(s=>s.id===saved.selected)?saved.selected:spaces[0].id}}const old=JSON.parse(localStorage.getItem(OLD)||'[]');const state=fresh();if(Array.isArray(old))state.spaces[0].links=old.filter(l=>l&&typeof l.name==='string'&&typeof l.url==='string'&&safeURL(l.url)).map(l=>({...l,id:String(l.id||id()),url:safeURL(l.url),enabled:l.enabled!==false}));return state}catch{return fresh()}}
+function App(){
+ const [data,setData]=useState(load),[name,setName]=useState(''),[url,setURL]=useState(''),[editing,setEditing]=useState(null),[notice,setNotice]=useState('');
+ const space=data.spaces.find(s=>s.id===data.selected)||data.spaces[0],active=space.links.filter(l=>l.enabled);
+ const saveData=next=>{setData(next);try{localStorage.setItem(KEY,JSON.stringify(next))}catch{setNotice('Não foi possível salvar neste navegador.')}};
+ const changeSpace=fn=>saveData({...data,spaces:data.spaces.map(s=>s.id===space.id?fn(s):s)});
+ const reset=()=>{setName('');setURL('');setEditing(null)};
+ const addSpace=()=>{const value=prompt('Nome do novo ambiente:');if(value===null)return;const clean=value.trim();if(!clean)return setNotice('Digite um nome para o ambiente.');if(clean.length>40)return setNotice('Use até 40 caracteres.');const newSpace={id:id(),name:clean,links:[]};saveData({...data,selected:newSpace.id,spaces:[...data.spaces,newSpace]});reset();setNotice('Ambiente criado.')};
+ const rename=()=>{const value=prompt('Renomear ambiente:',space.name);if(value===null)return;const clean=value.trim();if(!clean||clean.length>40)return setNotice('Nome inválido (máximo 40 caracteres).');changeSpace(s=>({...s,name:clean}));setNotice('Ambiente renomeado.')};
+ const removeSpace=()=>{if(data.spaces.length===1)return setNotice('Mantenha pelo menos um ambiente.');if(!confirm('Excluir o ambiente "'+space.name+'" e todos os links dele?'))return;const spaces=data.spaces.filter(s=>s.id!==space.id);saveData({...data,spaces,selected:spaces[0].id});reset();setNotice('Ambiente excluído.')};
+ const submit=e=>{e.preventDefault();const clean=safeURL(url);if(!name.trim()||!clean)return setNotice('Informe nome e endereço válido (http ou https).');changeSpace(s=>({...s,links:editing?s.links.map(l=>l.id===editing?{...l,name:name.trim(),url:clean}:l):[...s.links,{id:id(),name:name.trim(),url:clean,enabled:true}]}));reset();setNotice('Site salvo.')};
+ const edit=l=>{setName(l.name);setURL(l.url);setEditing(l.id);document.getElementById('site-name')?.focus()};
+ const remove=l=>{if(!confirm('Excluir "'+l.name+'"?'))return;changeSpace(s=>({...s,links:s.links.filter(x=>x.id!==l.id)}));if(editing===l.id)reset();setNotice('Site excluído.')};
+ const launch=()=>{let blocked=0;for(const l of active){const tab=window.open(l.url,'_blank');if(!tab)blocked++;else try{tab.opener=null}catch{}}setNotice(blocked?'O navegador bloqueou '+blocked+' aba(s). Permita pop-ups para este site.':'Solicitada a abertura de '+active.length+' aba(s).')};
+ return <main className="shell">
+ <header className="top"><div className="brand"><div className="brand-icon">↗</div><div><h1>Atos Launcher</h1><p>Seu trabalho começa aqui.</p></div></div><span className="version">v1.1</span></header>
+ <section className="intro"><div className="eyebrow">WORKSPACE</div><h2>Um clique. Tudo pronto.</h2><p>Organize seus sites em ambientes e abra tudo de uma vez.</p></section>
+ <section className="panel"><div className="heading"><div><div className="eyebrow">SEUS AMBIENTES</div><h3>Escolha onde começar</h3></div><button className="subtle add" onClick={addSpace}>+ Novo ambiente</button></div>
+ <div className="spaces" role="group" aria-label="Ambientes">{data.spaces.map(s=><button key={s.id} className={'space '+(s.id===space.id?'selected':'')} aria-pressed={s.id===space.id} onClick={()=>{saveData({...data,selected:s.id});reset();setNotice('')}}><span className="space-icon">▦</span><span>{s.name}</span><span className="count">{s.links.length}</span></button>)}</div></section>
+ <section className="panel links-panel"><div className="heading environment"><div><div className="eyebrow">AMBIENTE SELECIONADO</div><h3>{space.name}</h3><p>{active.length} {active.length===1?'site ativo':'sites ativos'} de {space.links.length}</p></div><div className="environment-actions"><button className="icon-button" onClick={rename} title="Renomear ambiente" aria-label="Renomear ambiente">✎</button>{data.spaces.length>1&&<button className="icon-button danger" onClick={removeSpace} title="Excluir ambiente" aria-label="Excluir ambiente">×</button>}</div></div>
+ <button className="launch" disabled={!active.length} onClick={launch}><span>↗</span> Iniciar ambiente <span className="launch-count">{active.length}</span></button>
+ <div className="list">{space.links.length?space.links.map(l=><div className="item" key={l.id}><label className="toggle"><input type="checkbox" aria-label={'Ativar '+l.name} checked={l.enabled} onChange={()=>changeSpace(s=>({...s,links:s.links.map(x=>x.id===l.id?{...x,enabled:!x.enabled}:x)}))}/><span/></label><div className="site"><strong>{l.name}</strong><small>{l.url}</small></div><div className="item-actions"><a href={l.url} target="_blank" rel="noopener noreferrer" title="Abrir site" aria-label={'Abrir '+l.name}>↗</a><button onClick={()=>edit(l)} title="Editar" aria-label={'Editar '+l.name}>✎</button><button onClick={()=>remove(l)} title="Excluir" aria-label={'Excluir '+l.name}>×</button></div></div>):<div className="empty"><div className="empty-icon">＋</div><strong>Este ambiente está vazio</strong><p>Adicione seus sites favoritos para começar.</p></div>}</div></section>
+ <section className="panel form-panel"><div className="heading"><div><div className="eyebrow">LINKS</div><h3>{editing?'Editar site':'Adicionar site'}</h3></div></div><form onSubmit={submit}><div className="fields"><label>Nome do site<input id="site-name" maxLength="70" placeholder="Ex.: GitHub" value={name} onChange={e=>setName(e.target.value)} required/></label><label>Endereço do site<input inputMode="url" placeholder="github.com" value={url} onChange={e=>setURL(e.target.value)} required/></label></div><div className="form-actions"><button className="primary" type="submit">{editing?'Salvar alterações':'+ Adicionar site'}</button>{editing&&<button className="subtle" type="button" onClick={reset}>Cancelar</button>}</div></form></section>
+ {notice&&<p className="notice" role="status">{notice}</p>}<footer>Atos Launcher · Seus ambientes são salvos neste navegador.</footer>
+ </main>
 }
-function load() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(KEY) || '[]');
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(x => x && typeof x.name === 'string' && typeof x.url === 'string' && normalize(x.url)).map(x => ({id: String(x.id || uid()),name:x.name,url:normalize(x.url),enabled:x.enabled !== false}));
-  } catch {return [];}
-}
-function App() {
-  const [links,setLinks] = useState(load);
-  const [name,setName] = useState('');
-  const [url,setUrl] = useState('');
-  const [editing,setEditing] = useState(null);
-  const [message,setMessage] = useState('');
-  const active = links.filter(x => x.enabled);
-  function update(next) {setLinks(next);localStorage.setItem(KEY,JSON.stringify(next));}
-  function reset() {setName('');setUrl('');setEditing(null);}
-  function save(e) {
-    e.preventDefault();
-    const clean = normalize(url);
-    if (!name.trim() || !clean) {setMessage('Informe um nome e uma URL válida (http ou https).');return;}
-    if (editing) update(links.map(x => x.id === editing ? {...x,name:name.trim(),url:clean} : x));
-    else update([...links,{id:uid(),name:name.trim(),url:clean,enabled:true}]);
-    reset();setMessage('Link salvo.');
-  }
-  function edit(item) {setEditing(item.id);setName(item.name);setUrl(item.url);setMessage('');document.getElementById('name')?.focus();}
-  function remove(item) {if (!window.confirm(`Excluir ${item.name}?`)) return;update(links.filter(x => x.id !== item.id));if (editing === item.id) reset();setMessage('Link excluído.');}
-  function launch() {
-    if (!active.length) return;
-    let blocked = 0;
-    for (const item of active) {
-      const tab = window.open(item.url,'_blank');
-      if (!tab) blocked++;
-      else {try {tab.opener = null;} catch {}}
-    }
-    setMessage(blocked ? `${blocked} aba(s) podem ter sido bloqueadas. Autorize pop-ups para este site no navegador.` : `${active.length} link(s) enviados para abertura. Verifique as novas abas.`);
-  }
-  return <main className="shell">
-    <header className="header"><div className="brandmark">↗</div><div><h1>Atos Launcher</h1><p>Seu workspace, em um clique.</p></div></header>
-    <section className="panel"><div className="section-head"><div><h2>Meu ambiente</h2><p>{active.length} {active.length === 1 ? 'site ativo' : 'sites ativos'} de {links.length}</p></div><button className="launch" onClick={launch} disabled={!active.length}>▶ Iniciar trabalho</button></div>
-    <div className="items">{links.length ? links.map(item => <div className="item" key={item.id}><label className="toggle" title="Incluir ao iniciar"><input type="checkbox" checked={item.enabled} onChange={() => update(links.map(x => x.id === item.id ? {...x,enabled:!x.enabled} : x))}/><span/></label><div className="site"><strong>{item.name}</strong><small>{item.url}</small></div><div className="actions"><a href={item.url} target="_blank" rel="noopener noreferrer" title="Abrir individualmente" aria-label={`Abrir ${item.name}`}>↗</a><button onClick={() => edit(item)} title="Editar" aria-label={`Editar ${item.name}`}>✎</button><button onClick={() => remove(item)} title="Excluir" aria-label={`Excluir ${item.name}`}>×</button></div></div>) : <div className="empty">Nenhum site cadastrado. Adicione seu primeiro link abaixo.</div>}</div></section>
-    <section className="panel form-panel"><h2>{editing ? 'Editar site' : 'Adicionar site'}</h2><form onSubmit={save}><label htmlFor="name">Nome<input id="name" maxLength="70" placeholder="Ex.: ChatGPT" value={name} onChange={e=>setName(e.target.value)} required/></label><label htmlFor="url">Endereço<input id="url" type="text" inputMode="url" placeholder="https://chatgpt.com" value={url} onChange={e=>setUrl(e.target.value)} required/></label><div className="form-actions"><button className="save" type="submit">{editing ? 'Salvar alterações' : '+ Adicionar link'}</button>{editing && <button className="cancel" type="button" onClick={reset}>Cancelar</button>}</div></form></section>
-    {message && <p className="notice" role="status">{message}</p>}
-    <footer>Atos Launcher · Seus links ficam salvos neste navegador.</footer>
-  </main>;
-}
-
 createRoot(document.getElementById('root')).render(<App/>);
